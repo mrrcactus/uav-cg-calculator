@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UAV Center of Gravity Calculator</title>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+
+        const CGCalculator = () => {
+            const [components, setComponents] = useState([
+                { id: 1, name: 'Motor (D3548)', weight: 156, position: 2, category: 'propulsion', locked: false },
+                { id: 2, name: 'Propeller (12")', weight: 35, position: 0, category: 'propulsion', locked: false },
+                { id: 3, name: 'Battery (3S 3300mAh)', weight: 280, position: 15, category: 'power', locked: false },
+                { id: 4, name: 'Power Module (PM08D)', weight: 151, position: 16, category: 'power', locked: false },
+                { id: 5, name: 'ESC', weight: 45, position: 18, category: 'avionics', locked: false },
+                { id: 6, name: 'Flight Controller', weight: 35, position: 22, category: 'avionics', locked: false },
+                { id: 7, name: 'Receiver', weight: 20, position: 24, category: 'avionics', locked: false },
+                { id: 8, name: 'Fuselage Structure', weight: 250, position: 47, category: 'structure', locked: false },
+                { id: 9, name: 'Wing Structure', weight: 250, position: 25, category: 'structure', locked: false },
+                { id: 10, name: 'Tail Surfaces', weight: 80, position: 74, category: 'structure', locked: false },
+                { id: 11, name: 'Aileron Servos (2x)', weight: 20, position: 26, category: 'control', locked: false },
+                { id: 12, name: 'Elevator Servo', weight: 10, position: 72, category: 'control', locked: false },
+                { id: 13, name: 'Rudder Servo', weight: 10, position: 73, category: 'control', locked: false },
+                { id: 14, name: 'Landing Gear', weight: 50, position: 28, category: 'structure', locked: false },
+                { id: 15, name: 'Miscellaneous Hardware', weight: 50, position: 35, category: 'other', locked: false },
+            ]);
+
+            const [wingLE, setWingLE] = useState(23);
+            const [macLength, setMacLength] = useState(15);
+            const [targetCGPercent, setTargetCGPercent] = useState(27);
+            const [showInches, setShowInches] = useState(false);
+
+            const conversionFactor = showInches ? 0.393701 : 1;
+            const unit = showInches ? 'in' : 'cm';
+
+            const updateComponent = (id, field, value) => {
+                setComponents(components.map(comp => 
+                    comp.id === id ? { ...comp, [field]: parseFloat(value) || 0 } : comp
+                ));
+            };
+
+            const addComponent = () => {
+                const newId = Math.max(...components.map(c => c.id)) + 1;
+                setComponents([...components, {
+                    id: newId,
+                    name: 'New Component',
+                    weight: 0,
+                    position: 0,
+                    category: 'other',
+                    locked: false
+                }]);
+            };
+
+            const removeComponent = (id) => {
+                setComponents(components.filter(comp => comp.id !== id));
+            };
+
+            const calculations = useMemo(() => {
+                const totalWeight = components.reduce((sum, comp) => sum + comp.weight, 0);
+                const totalMoment = components.reduce((sum, comp) => sum + (comp.weight * comp.position), 0);
+                const cgPosition = totalWeight > 0 ? totalMoment / totalWeight : 0;
+                
+                const macQuarterChord = wingLE + (macLength * 0.25);
+                const cgFromMacLE = cgPosition - wingLE;
+                const cgPercentMAC = (cgFromMacLE / macLength) * 100;
+                const targetCG = wingLE + (macLength * (targetCGPercent / 100));
+                const cgError = cgPosition - targetCG;
+
+                const totalWeightLb = totalWeight / 453.592;
+                const maxLiftLb = 10;
+                const marginLb = maxLiftLb - totalWeightLb;
+
+                return {
+                    totalWeight,
+                    totalMoment,
+                    cgPosition,
+                    macQuarterChord,
+                    cgFromMacLE,
+                    cgPercentMAC,
+                    targetCG,
+                    cgError,
+                    totalWeightLb,
+                    maxLiftLb,
+                    marginLb
+                };
+            }, [components, wingLE, macLength, targetCGPercent]);
+
+            const categoryColors = {
+                propulsion: 'bg-blue-100 border-blue-300',
+                power: 'bg-green-100 border-green-300',
+                avionics: 'bg-purple-100 border-purple-300',
+                structure: 'bg-orange-100 border-orange-300',
+                control: 'bg-yellow-100 border-yellow-300',
+                other: 'bg-gray-100 border-gray-300'
+            };
+
+            const isWithinSpec = Math.abs(calculations.cgPercentMAC - targetCGPercent) < 5;
+
+            return (
+                <div className="w-full max-w-7xl mx-auto p-6 bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
+                    <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                        <div className="flex items-center gap-3 mb-6">
+                            <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                            <h1 className="text-3xl font-bold text-gray-800">UAV Center of Gravity Calculator</h1>
+                        </div>
+
+                        {/* Configuration Panel */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 p-4 bg-blue-50 rounded-lg">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Wing Leading Edge (cm)</label>
+                                <input
+                                    type="number"
+                                    value={wingLE}
+                                    onChange={(e) => setWingLE(parseFloat(e.target.value) || 0)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    step="0.1"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">MAC Length (cm)</label>
+                                <input
+                                    type="number"
+                                    value={macLength}
+                                    onChange={(e) => setMacLength(parseFloat(e.target.value) || 0)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    step="0.1"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Target CG (% MAC)</label>
+                                <input
+                                    type="number"
+                                    value={targetCGPercent}
+                                    onChange={(e) => setTargetCGPercent(parseFloat(e.target.value) || 0)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    step="0.5"
+                                />
+                            </div>
+                            <div className="flex items-end">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={showInches}
+                                        onChange={(e) => setShowInches(e.target.checked)}
+                                        className="w-4 h-4"
+                                    />
+                                    <span className="text-sm font-semibold text-gray-700">Show in inches</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Results Summary */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                            <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-4 rounded-lg shadow-md">
+                                <div className="text-sm opacity-90">Total Weight</div>
+                                <div className="text-2xl font-bold">{calculations.totalWeight.toFixed(1)} g</div>
+                                <div className="text-sm opacity-90">{calculations.totalWeightLb.toFixed(2)} lb</div>
+                            </div>
+                            <div className={`p-4 rounded-lg shadow-md ${isWithinSpec ? 'bg-gradient-to-br from-green-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-red-600'} text-white`}>
+                                <div className="text-sm opacity-90">Calculated CG</div>
+                                <div className="text-2xl font-bold">{(calculations.cgPosition * conversionFactor).toFixed(2)} {unit}</div>
+                                <div className="text-sm opacity-90">{calculations.cgPercentMAC.toFixed(1)}% MAC</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-4 rounded-lg shadow-md">
+                                <div className="text-sm opacity-90">Target CG</div>
+                                <div className="text-2xl font-bold">{(calculations.targetCG * conversionFactor).toFixed(2)} {unit}</div>
+                                <div className="text-sm opacity-90">{targetCGPercent}% MAC</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-4 rounded-lg shadow-md">
+                                <div className="text-sm opacity-90">Weight Margin</div>
+                                <div className="text-2xl font-bold">{calculations.marginLb.toFixed(2)} lb</div>
+                                <div className="text-sm opacity-90">{((calculations.marginLb / calculations.maxLiftLb) * 100).toFixed(1)}%</div>
+                            </div>
+                        </div>
+
+                        {/* CG Status Alert */}
+                        {!isWithinSpec && (
+                            <div className="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                                <div className="flex items-start gap-3">
+                                    <svg className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <div>
+                                        <div className="font-semibold text-yellow-800">CG Adjustment Needed</div>
+                                        <div className="text-sm text-yellow-700">
+                                            Current CG is {calculations.cgError > 0 ? 'aft' : 'forward'} of target by {Math.abs(calculations.cgError).toFixed(2)} cm.
+                                            {calculations.cgError > 0 ? ' Move heavy components forward or add nose weight.' : ' Move heavy components aft.'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Components Table */}
+                        <div className="overflow-x-auto mb-4">
+                            <table className="w-full border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-100">
+                                        <th className="border border-gray-300 px-4 py-2 text-left">Component</th>
+                                        <th className="border border-gray-300 px-4 py-2 text-left">Category</th>
+                                        <th className="border border-gray-300 px-4 py-2 text-right">Weight (g)</th>
+                                        <th className="border border-gray-300 px-4 py-2 text-right">Position ({unit})</th>
+                                        <th className="border border-gray-300 px-4 py-2 text-right">Moment (g·cm)</th>
+                                        <th className="border border-gray-300 px-4 py-2 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {components.map((comp) => (
+                                        <tr key={comp.id} className={`${categoryColors[comp.category]} border-b`}>
+                                            <td className="border border-gray-300 px-2 py-2">
+                                                <input
+                                                    type="text"
+                                                    value={comp.name}
+                                                    onChange={(e) => {
+                                                        const newComponents = components.map(c => 
+                                                            c.id === comp.id ? { ...c, name: e.target.value } : c
+                                                        );
+                                                        setComponents(newComponents);
+                                                    }}
+                                                    className="w-full px-2 py-1 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-blue-300 rounded"
+                                                />
+                                            </td>
+                                            <td className="border border-gray-300 px-2 py-2">
+                                                <select
+                                                    value={comp.category}
+                                                    onChange={(e) => {
+                                                        const newComponents = components.map(c => 
+                                                            c.id === comp.id ? { ...c, category: e.target.value } : c
+                                                        );
+                                                        setComponents(newComponents);
+                                                    }}
+                                                    className="w-full px-2 py-1 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-blue-300 rounded"
+                                                >
+                                                    <option value="propulsion">Propulsion</option>
+                                                    <option value="power">Power</option>
+                                                    <option value="avionics">Avionics</option>
+                                                    <option value="structure">Structure</option>
+                                                    <option value="control">Control</option>
+                                                    <option value="other">Other</option>
+                                                </select>
+                                            </td>
+                                            <td className="border border-gray-300 px-2 py-2">
+                                                <input
+                                                    type="number"
+                                                    value={comp.weight}
+                                                    onChange={(e) => updateComponent(comp.id, 'weight', e.target.value)}
+                                                    className="w-full px-2 py-1 text-right bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-blue-300 rounded"
+                                                    step="1"
+                                                />
+                                            </td>
+                                            <td className="border border-gray-300 px-2 py-2">
+                                                <input
+                                                    type="number"
+                                                    value={showInches ? (comp.position * conversionFactor).toFixed(2) : comp.position}
+                                                    onChange={(e) => {
+                                                        const val = parseFloat(e.target.value) || 0;
+                                                        updateComponent(comp.id, 'position', showInches ? val / conversionFactor : val);
+                                                    }}
+                                                    className="w-full px-2 py-1 text-right bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-blue-300 rounded"
+                                                    step={showInches ? "0.1" : "0.5"}
+                                                />
+                                            </td>
+                                            <td className="border border-gray-300 px-4 py-2 text-right font-mono">
+                                                {(comp.weight * comp.position).toFixed(1)}
+                                            </td>
+                                            <td className="border border-gray-300 px-2 py-2 text-center">
+                                                <button
+                                                    onClick={() => removeComponent(comp.id)}
+                                                    className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm transition-colors"
+                                                >
+                                                    Remove
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    <tr className="bg-gray-200 font-bold">
+                                        <td colSpan="2" className="border border-gray-300 px-4 py-2 text-right">TOTALS:</td>
+                                        <td className="border border-gray-300 px-4 py-2 text-right">{calculations.totalWeight.toFixed(1)}</td>
+                                        <td className="border border-gray-300 px-4 py-2"></td>
+                                        <td className="border border-gray-300 px-4 py-2 text-right font-mono">{calculations.totalMoment.toFixed(1)}</td>
+                                        <td className="border border-gray-300 px-4 py-2"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <button
+                            onClick={addComponent}
+                            className="w-full py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-semibold mb-6 transition-colors"
+                        >
+                            + Add Component
+                        </button>
+
+                        {/* Detailed Calculations */}
+                        <div className="bg-gray-50 p-6 rounded-lg mb-6">
+                            <h2 className="text-xl font-bold text-gray-800 mb-4">Detailed CG Calculations</h2>
+                            
+                            <div className="space-y-3 font-mono text-sm">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <div className="font-semibold text-gray-700">Reference Datum:</div>
+                                        <div>Aircraft nose (0 cm)</div>
+                                    </div>
+                                    <div>
+                                        <div className="font-semibold text-gray-700">Wing Leading Edge:</div>
+                                        <div>{wingLE.toFixed(1)} cm from nose</div>
+                                    </div>
+                                </div>
+
+                                <div className="border-t pt-3 mt-3">
+                                    <div className="font-semibold text-gray-700 mb-2">CG Calculation:</div>
+                                    <div>Total Moment = Σ(Weight × Position) = {calculations.totalMoment.toFixed(1)} g·cm</div>
+                                    <div>Total Weight = Σ(Weight) = {calculations.totalWeight.toFixed(1)} g</div>
+                                    <div className="mt-2 p-2 bg-blue-100 rounded">
+                                        <strong>CG Position = Total Moment ÷ Total Weight</strong>
+                                        <div className="ml-4">= {calculations.totalMoment.toFixed(1)} ÷ {calculations.totalWeight.toFixed(1)}</div>
+                                        <div className="ml-4 text-lg"><strong>= {calculations.cgPosition.toFixed(2)} cm from nose</strong></div>
+                                    </div>
+                                </div>
+
+                                <div className="border-t pt-3 mt-3">
+                                    <div className="font-semibold text-gray-700 mb-2">CG Relative to MAC:</div>
+                                    <div>MAC Leading Edge: {wingLE.toFixed(1)} cm</div>
+                                    <div>MAC Length: {macLength.toFixed(1)} cm</div>
+                                    <div>CG from MAC LE = {calculations.cgPosition.toFixed(2)} - {wingLE.toFixed(1)} = {calculations.cgFromMacLE.toFixed(2)} cm</div>
+                                    <div className="mt-2 p-2 bg-green-100 rounded">
+                                        <strong>CG % MAC = (CG from MAC LE ÷ MAC Length) × 100</strong>
+                                        <div className="ml-4">= ({calculations.cgFromMacLE.toFixed(2)} ÷ {macLength.toFixed(1)}) × 100</div>
+                                        <div className="ml-4 text-lg"><strong>= {calculations.cgPercentMAC.toFixed(1)}% MAC</strong></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* References Section */}
+                        <div className="bg-blue-50 p-6 rounded-lg border-l-4 border-blue-500">
+                            <h2 className="text-xl font-bold text-gray-800 mb-4">Methodology & References</h2>
+                            
+                            <div className="space-y-4 text-sm text-gray-700">
+                                <div>
+                                    <div className="font-semibold text-gray-800 mb-1">CG Calculation Method:</div>
+                                    <div className="ml-4">
+                                        The center of gravity is calculated using the moment balance equation, where the CG location 
+                                        is the point where the sum of all moments about that point equals zero. This is fundamental 
+                                        to aircraft weight and balance calculations.
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="font-semibold text-gray-800 mb-1">Formula:</div>
+                                    <div className="ml-4 font-mono bg-white p-2 rounded">
+                                        x̄<sub>CG</sub> = Σ(m<sub>i</sub> × x<sub>i</sub>) / Σ(m<sub>i</sub>)
+                                    </div>
+                                    <div className="ml-4 mt-1 text-xs">
+                                        Where m<sub>i</sub> is the mass of component i, and x<sub>i</sub> is its position from the reference datum
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="font-semibold text-gray-800 mb-1">CG Position Relative to MAC:</div>
+                                    <div className="ml-4">
+                                        For longitudinal stability, the CG must be forward of the aerodynamic center (typically at 25% MAC). 
+                                        Recommended CG range for stable flight is 25-30% MAC for conventional UAV configurations.
+                                    </div>
+                                </div>
+
+                                <div className="border-t pt-3">
+                                    <div className="font-semibold text-gray-800 mb-2">Key References:</div>
+                                    <ol className="list-decimal ml-8 space-y-2">
+                                        <li>
+                                            <strong>Raymer, D. P.</strong> (2018). <em>Aircraft Design: A Conceptual Approach</em> (6th ed.). 
+                                            AIAA Education Series. Chapter 6: Weight and Balance.
+                                        </li>
+                                        <li>
+                                            <strong>Sadraey, M. H.</strong> (2012). <em>Aircraft Design: A Systems Engineering Approach</em>. 
+                                            Wiley. Section 5.4: Center of Gravity Determination.
+                                        </li>
+                                        <li>
+                                            <strong>Nelson, R. C.</strong> (1998). <em>Flight Stability and Automatic Control</em> (2nd ed.). 
+                                            McGraw-Hill. Chapter 1: Static Stability and Control.
+                                        </li>
+                                        <li>
+                                            <strong>Roskam, J.</strong> (1985). <em>Airplane Design Part V: Component Weight Estimation</em>. 
+                                            DARcorporation. Chapter 3: Weight and Balance Analysis.
+                                        </li>
+                                        <li>
+                                            <strong>FAA.</strong> (2016). <em>Aircraft Weight and Balance Handbook</em> (FAA-H-8083-1B). 
+                                            U.S. Department of Transportation. Chapter 1: Weight and Balance Theory.
+                                        </li>
+                                        <li>
+                                            <strong>Austin, R.</strong> (2010). <em>Unmanned Aircraft Systems: UAVs Design, Development and Deployment</em>. 
+                                            Wiley. Chapter 4: Preliminary Design and Configuration.
+                                        </li>
+                                    </ol>
+                                </div>
+
+                                <div className="border-t pt-3">
+                                    <div className="font-semibold text-gray-800 mb-2">Design Guidelines Applied:</div>
+                                    <ul className="list-disc ml-8 space-y-1">
+                                        <li>CG typically located at 25-30% MAC for conventional aircraft (Raymer, 2018)</li>
+                                        <li>Neutral point typically at 25% MAC for stable flight (Nelson, 1998)</li>
+                                        <li>Static margin of 5-10% MAC recommended for autonomous UAVs (Austin, 2010)</li>
+                                        <li>Component weight estimation based on manufacturer specifications and empirical data</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<CGCalculator />, document.getElementById('root'));
+    </script>
+</body>
+</html>
